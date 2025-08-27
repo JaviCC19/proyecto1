@@ -103,9 +103,34 @@ pub fn render_maze(
         }
     }
 
-    // jugador en minimapa
-    framebuffer.set_current_color(Color::RED);
-    framebuffer.set_pixel((player.pos.x / 5.0) as u32, (player.pos.y / 5.0) as u32);
+    // --- Jugador en minimapa con textura ---
+    if let Some(image) = texture_cache.images.get(&'p') { // usa 'p' para pokeball
+        let tex_w = image.width as usize;
+        let tex_h = image.height as usize;
+
+        // Escalar para que no tape todo el minimapa
+        let scale = 10; // tamaño del icono en el minimapa
+        let px = (player.pos.x / 5.0) as usize;
+        let py = (player.pos.y / 5.0) as usize;
+
+        for x in 0..scale {
+            for y in 0..scale {
+                let tx = (x * tex_w) / scale;
+                let ty = (y * tex_h) / scale;
+                let color = texture_cache.get_pixel_color('p', tx as u32, ty as u32);
+
+                // Transparencia: solo dibuja píxeles no transparentes
+                if color.a > 0 {
+                    framebuffer.set_current_color(color);
+                    framebuffer.set_pixel((px + x) as u32, (py + y) as u32);
+                }
+            }
+        }
+    } else {
+        // fallback si no encuentra la textura
+        framebuffer.set_current_color(Color::RED);
+        framebuffer.set_pixel((player.pos.x / 5.0) as u32, (player.pos.y / 5.0) as u32);
+    }
 }
 
 fn render_world(

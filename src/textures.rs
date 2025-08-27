@@ -16,6 +16,7 @@ impl TextureManager {
             ('+', "assets/wall.png"),
             ('-', "assets/wall.png"),
             ('|', "assets/wall.png"),
+            ('p', "assets/pokeball.jpg"),
 
             // Sprites
             ('A', "assets/squirtle.jpg"),
