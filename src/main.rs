@@ -21,8 +21,7 @@ use std::time::Duration;
 use std::f32::consts::PI;
 
 use crate::maze::is_wall;
-use crate::sprites::Sprite;
-use crate::sprites::render_sprites;
+use crate::sprites::{Sprite, render_sprites};
 
 use std::fs::File;
 use std::io::BufReader;
@@ -45,7 +44,7 @@ fn cell_to_color(cell: char) -> Color {
         '-' => Color::VIOLET,
         '|' => Color::VIOLET,
         'g' => Color::GREEN,
-        'p' => Color::RED, // jugador en minimapa
+        'p' => Color::RED,
         _ => Color::WHITE,
     }
 }
@@ -58,15 +57,11 @@ fn draw_cell(
     cell: char,
     texture_cache: &TextureManager,
 ) {
-    if cell == ' ' {
-        return; // no dibujar nada si es espacio
-    }
+    if cell == ' ' { return; }
 
     if let Some(image) = texture_cache.images.get(&cell) {
-        // pintar textura reducida (para el minimapa)
         let tex_w = image.width as usize;
         let tex_h = image.height as usize;
-
         for x in 0..block_size {
             for y in 0..block_size {
                 let tx = (x * tex_w) / block_size;
@@ -77,7 +72,6 @@ fn draw_cell(
             }
         }
     } else {
-        // fallback solo si no hay textura
         framebuffer.set_current_color(cell_to_color(cell));
         for x in xo..xo + block_size {
             for y in yo..yo + block_size {
@@ -94,7 +88,6 @@ pub fn render_maze(
     player: &Player,
     texture_cache: &TextureManager,
 ) {
-    // minimapa del laberinto
     for (row_index, row) in maze.iter().enumerate() {
         for (col_index, &cell) in row.iter().enumerate() {
             let xo = col_index * block_size;
@@ -103,13 +96,10 @@ pub fn render_maze(
         }
     }
 
-    // --- Jugador en minimapa con textura ---
-    if let Some(image) = texture_cache.images.get(&'p') { // usa 'p' para pokeball
+    if let Some(image) = texture_cache.images.get(&'p') {
         let tex_w = image.width as usize;
         let tex_h = image.height as usize;
-
-        // Escalar para que no tape todo el minimapa
-        let scale = 10; // tamaño del icono en el minimapa
+        let scale = 10;
         let px = (player.pos.x / 5.0) as usize;
         let py = (player.pos.y / 5.0) as usize;
 
@@ -118,8 +108,6 @@ pub fn render_maze(
                 let tx = (x * tex_w) / scale;
                 let ty = (y * tex_h) / scale;
                 let color = texture_cache.get_pixel_color('p', tx as u32, ty as u32);
-
-                // Transparencia: solo dibuja píxeles no transparentes
                 if color.a > 0 {
                     framebuffer.set_current_color(color);
                     framebuffer.set_pixel((px + x) as u32, (py + y) as u32);
@@ -127,7 +115,6 @@ pub fn render_maze(
             }
         }
     } else {
-        // fallback si no encuentra la textura
         framebuffer.set_current_color(Color::RED);
         framebuffer.set_pixel((player.pos.x / 5.0) as u32, (player.pos.y / 5.0) as u32);
     }
@@ -144,16 +131,11 @@ fn render_world(
     let hh = framebuffer.height as f32 / 2.0;
     let mut z_buffer = vec![f32::INFINITY; num_rays as usize];
 
-    // Sky & floor
     for i in 0..framebuffer.width {
         framebuffer.set_current_color(Color::SKYBLUE);
-        for j in 0..(framebuffer.height / 2) {
-            framebuffer.set_pixel(i, j);
-        }
+        for j in 0..(framebuffer.height / 2) { framebuffer.set_pixel(i, j); }
         framebuffer.set_current_color(Color::LIGHTGREEN);
-        for j in (framebuffer.height / 2)..framebuffer.height {
-            framebuffer.set_pixel(i, j);
-        }
+        for j in (framebuffer.height / 2)..framebuffer.height { framebuffer.set_pixel(i, j); }
     }
 
     framebuffer.set_current_color(Color::WHITESMOKE);
@@ -168,21 +150,12 @@ fn render_world(
 
         let distance_to_projection_plane = 70.0;
         let stake_height = (hh / distance_to_wall) * distance_to_projection_plane;
-
         let stake_top = (hh - (stake_height / 2.0)) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)) as usize;
 
         for y in stake_top..stake_bottom {
-            let ty = (y as f32 - stake_top as f32)
-                / (stake_bottom as f32 - stake_top as f32)
-                * 128.0;
-
-            let color = cell_to_texture_color(
-                texture_cache,
-                intersect.impact,
-                intersect.tx as u32,
-                ty as u32,
-            );
+            let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) * 128.0;
+            let color = cell_to_texture_color(texture_cache, intersect.impact, intersect.tx as u32, ty as u32);
             framebuffer.set_current_color(color);
             framebuffer.set_pixel(i, y as u32);
         }
@@ -191,15 +164,12 @@ fn render_world(
     z_buffer
 }
 
-
 fn main() {
     let window_width = 1300;
     let window_height = 900;
     let block_size = 100;
 
-    let stream_handle = rodio::OutputStreamBuilder::open_default_stream()
-        .expect("open default audio stream");
-
+    let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
     let file = BufReader::new(File::open("sounds/Karma.mp3").unwrap());
     let _sink = rodio::play(&stream_handle.mixer(), file).unwrap();
 
@@ -215,43 +185,11 @@ fn main() {
     let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32);
     framebuffer.set_background_color(Color::new(50, 50, 100, 255));
 
-    // --- Texturas ---
     let texture_cache = TextureManager::new(&mut window, &raylib_thread);
 
-    // --- Cargar imágenes de pantallas ---
     let start_screen = window.load_texture(&raylib_thread, "assets/start.png").unwrap();
     let end_screen = window.load_texture(&raylib_thread, "assets/end.png").unwrap();
 
-    // --- Pantalla de inicio ---
-    while !window.window_should_close() {
-        let mut d = window.begin_drawing(&raylib_thread);
-        d.clear_background(Color::BLACK);
-
-        d.draw_texture_pro(
-            &start_screen,
-            Rectangle {
-                x: 0.0,
-                y: 0.0,
-                width: start_screen.width() as f32,
-                height: start_screen.height() as f32,
-            },
-            Rectangle {
-                x: 0.0,
-                y: 0.0,
-                width: window_width as f32,
-                height: window_height as f32,
-            },
-            Vector2::new(0.0, 0.0),
-            0.0,
-            Color::WHITE,
-        );
-
-        if d.is_key_pressed(KeyboardKey::KEY_ENTER) {
-            break;
-        }
-    }
-
-    // --- NEW: función para ejecutar un nivel ---
     fn run_level(
         window: &mut RaylibHandle,
         raylib_thread: &RaylibThread,
@@ -263,7 +201,6 @@ fn main() {
         let maze = load_maze(maze_file);
         let mut player = Player::new(Vector2::new(150.0, 150.0), PI / 3.0, PI / 3.0);
 
-        // --- Sprites ---
         let mut sprites = Vec::new();
         for (row_index, row) in maze.iter().enumerate() {
             for (col_index, &cell) in row.iter().enumerate() {
@@ -284,54 +221,31 @@ fn main() {
         let mut game_won = false;
         while !window.window_should_close() && !game_won {
             framebuffer.clear();
-
             let old_x = player.pos.x;
             let old_y = player.pos.y;
-
-            // Input
             process_events(&mut player, &window);
 
-            // Colisiones con muros
-            if is_wall(player.pos.x, old_y, &maze, block_size) {
-                player.pos.x = old_x;
-            }
-            if is_wall(old_x, player.pos.y, &maze, block_size) {
-                player.pos.y = old_y;
-            }
+            if is_wall(player.pos.x, old_y, &maze, block_size) { player.pos.x = old_x; }
+            if is_wall(old_x, player.pos.y, &maze, block_size) { player.pos.y = old_y; }
 
-            // Revisar si el jugador toca un sprite
+            // Colisión con sprites -> desaparecen al tocarlos
             for sprite in &mut sprites {
                 if !sprite.collected {
                     let dx = player.pos.x - sprite.x;
                     let dy = player.pos.y - sprite.y;
-                    let dist = (dx * dx + dy * dy).sqrt();
+                    let dist = (dx*dx + dy*dy).sqrt();
                     if dist < 80.0 {
                         sprite.collected = true;
                     }
                 }
             }
 
-            // ¿Ganó el nivel?
             game_won = sprites.iter().all(|s| s.collected);
-            if game_won {
-                break;
-            }
+            if game_won { break; }
 
-            // Render paredes y obtener z-buffer
-            let z_buffer = render_world(
-                framebuffer,
-                &maze,
-                block_size,
-                &player,
-                texture_cache,
-            );
+            let z_buffer = render_world(framebuffer, &maze, block_size, &player, texture_cache);
 
-            // Ordenar y dibujar sprites
-            let mut sprites_sorted: Vec<_> = sprites
-                .iter()
-                .filter(|s| !s.collected)
-                .cloned()
-                .collect();
+            let mut sprites_sorted: Vec<_> = sprites.iter().filter(|s| !s.collected).cloned().collect();
             sprites_sorted.sort_by(|a, b| {
                 let da = (a.x - player.pos.x).powi(2) + (a.y - player.pos.y).powi(2);
                 let db = (b.x - player.pos.x).powi(2) + (b.y - player.pos.y).powi(2);
@@ -339,10 +253,8 @@ fn main() {
             });
             render_sprites(framebuffer, &player, &sprites_sorted, &z_buffer);
 
-            // Minimap
             render_maze(framebuffer, &maze, 20, &player, texture_cache);
 
-            // Debug: sprites en minimapa
             for sprite in &sprites {
                 if !sprite.collected {
                     let x = (sprite.x / 5.0) as u32;
@@ -359,51 +271,67 @@ fn main() {
         game_won
     }
 
-    // --- Jugar nivel 1 ---
-    let level1_won = run_level(&mut window, &raylib_thread, &mut framebuffer, &texture_cache, block_size, "maze.txt");
+    'menu: loop {
+        let mut selected_level = 1;
 
-    // --- Jugar nivel 2 SOLO si completó nivel 1 ---
-    let mut all_game_won = false;
-    if level1_won {
-        all_game_won = run_level(&mut window, &raylib_thread, &mut framebuffer, &texture_cache, block_size, "maze2.txt");
-    }
-
-    // --- Pantalla final ---
-    if all_game_won {
         while !window.window_should_close() {
             let mut d = window.begin_drawing(&raylib_thread);
             d.clear_background(Color::BLACK);
-
             d.draw_texture_pro(
-                &end_screen,
-                Rectangle {
-                    x: 0.0,
-                    y: 0.0,
-                    width: end_screen.width() as f32,
-                    height: end_screen.height() as f32,
-                },
-                Rectangle {
-                    x: 0.0,
-                    y: 0.0,
-                    width: window_width as f32,
-                    height: window_height as f32,
-                },
-                Vector2::new(0.0, 0.0),
+                &start_screen,
+                Rectangle { x:0.0, y:0.0, width:start_screen.width() as f32, height:start_screen.height() as f32 },
+                Rectangle { x:0.0, y:0.0, width:window_width as f32, height:window_height as f32 },
+                Vector2::new(0.0,0.0),
                 0.0,
-                Color::WHITE,
+                Color::WHITE
             );
 
-            d.draw_text(
-                "¡Felicidades! Has completado los dos niveles.",
-                350,
-                800,
-                28,
-                Color::WHITE,
-            );
+            d.draw_text("Selecciona un nivel con ↑ y ↓, ENTER para empezar", 260, 680, 26, Color::WHITE);
+            let color1 = if selected_level == 1 { Color::YELLOW } else { Color::LIGHTGRAY };
+            let color2 = if selected_level == 2 { Color::YELLOW } else { Color::LIGHTGRAY };
+            d.draw_text("Nivel 1", 600, 730, 36, color1);
+            d.draw_text("Nivel 2", 600, 780, 36, color2);
 
-            if d.is_key_pressed(KeyboardKey::KEY_ENTER) || d.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
-                break;
+            if d.is_key_pressed(KeyboardKey::KEY_DOWN) { selected_level = 2; }
+            if d.is_key_pressed(KeyboardKey::KEY_UP) { selected_level = 1; }
+            if d.is_key_pressed(KeyboardKey::KEY_ENTER) { break; }
+            if d.is_key_pressed(KeyboardKey::KEY_ESCAPE) { break 'menu; }
+        }
+
+        if window.window_should_close() { break; }
+
+        let mut all_game_won = false;
+
+        if selected_level == 1 {
+            let level1_won = run_level(&mut window, &raylib_thread, &mut framebuffer, &texture_cache, block_size, "maze.txt");
+            if level1_won {
+                let level2_won = run_level(&mut window, &raylib_thread, &mut framebuffer, &texture_cache, block_size, "maze2.txt");
+                if level2_won { all_game_won = true; }
+            }
+        } else {
+            let _ = run_level(&mut window, &raylib_thread, &mut framebuffer, &texture_cache, block_size, "maze2.txt");
+        }
+
+        if all_game_won {
+            while !window.window_should_close() {
+                let mut d = window.begin_drawing(&raylib_thread);
+                d.clear_background(Color::BLACK);
+                d.draw_texture_pro(
+                    &end_screen,
+                    Rectangle { x:0.0, y:0.0, width:end_screen.width() as f32, height:end_screen.height() as f32 },
+                    Rectangle { x:0.0, y:0.0, width:window_width as f32, height:window_height as f32 },
+                    Vector2::new(0.0,0.0),
+                    0.0,
+                    Color::WHITE
+                );
+                d.draw_text("¡Felicidades! Has completado los dos niveles.", 350, 800, 28, Color::WHITE);
+
+                if d.is_key_pressed(KeyboardKey::KEY_ENTER) || d.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
+                    break;
+                }
             }
         }
+
+        if window.window_should_close() { break; }
     }
 }
